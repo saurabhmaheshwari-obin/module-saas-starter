@@ -9,7 +9,8 @@
 // that resolves to a private, loopback, link-local, or otherwise non-public
 // address is refused, on the initial request and on any redirect, checked
 // against the exact IP being connected to (not the hostname) so DNS rebinding
-// cannot slip past the check.
+// cannot slip past the check. The one exception is a local runtime's explicit
+// list of loopback addresses (local_egress.go), refused at boot anywhere else.
 package apisource
 
 import (
@@ -89,7 +90,9 @@ func New(cfg Config, credential string) *Client {
 
 // guardedClient builds an HTTP client that refuses connections to non-public
 // addresses, on the initial request and every redirect. Both the fetch client
-// and the OAuth token exchange dial tenant-supplied hosts, so both use it.
+// and the OAuth token exchange dial tenant-supplied hosts, so both use it. A
+// local runtime's explicit allowance (local_egress.go) is consulted first and
+// admits only the exact addresses it lists.
 func guardedClient() *http.Client {
 	transport := &http.Transport{
 		// These clients make a single exchange. An idle connection is neither
@@ -98,7 +101,7 @@ func guardedClient() *http.Client {
 		DisableKeepAlives: true,
 		DialContext: (&net.Dialer{
 			Timeout: 10 * time.Second,
-			Control: guardDial,
+			Control: dialControl(),
 		}).DialContext,
 	}
 	return &http.Client{
